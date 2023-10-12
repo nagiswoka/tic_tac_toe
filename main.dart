@@ -1,7 +1,6 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:confetti/confetti.dart';
+import 'package:tic_tac_toe/client.dart';
 import 'package:tic_tac_toe/matrix.dart';
 
 void main() {
@@ -29,28 +28,32 @@ class Games extends StatefulWidget {
 
 class _GamesState extends State<Games> {
   int player = 1;
-  int count = 0;
+  Map<int, String> players = {};
   List<List<int>> matrixValues =
       List.generate(3, (_) => List.generate(3, (_) => 0));
 
+  List<List<int>> movesHistory =
+      List.generate(3, (_) => List.generate(3, (_) => 0));
+
   late ConfettiController _controllerCenter;
-  late ConfettiController _controllerCenterRight;
-  late ConfettiController _controllerCenterLeft;
-  late ConfettiController _controllerTopCenter;
-  late ConfettiController _controllerBottomCenter;
+  // late ConfettiController _controllerCenterRight;
+  // late ConfettiController _controllerCenterLeft;
+  // late ConfettiController _controllerTopCenter;
+  // late ConfettiController _controllerBottomCenter;
+
+  late Client client;
+
+  String name = "";
+  String roomId = "";
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _roomController = TextEditingController();
+
+  bool isWelcomeDialogShown = false;
 
   @override
   void initState() {
     super.initState();
     _controllerCenter =
-        ConfettiController(duration: const Duration(seconds: 10));
-    _controllerCenterRight =
-        ConfettiController(duration: const Duration(seconds: 10));
-    _controllerCenterLeft =
-        ConfettiController(duration: const Duration(seconds: 10));
-    _controllerTopCenter =
-        ConfettiController(duration: const Duration(seconds: 10));
-    _controllerBottomCenter =
         ConfettiController(duration: const Duration(seconds: 10));
   }
 
@@ -155,8 +158,237 @@ class _GamesState extends State<Games> {
     );
   }
 
+  void joinRoom() {
+    Navigator.of(context).pop();
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Join Room'),
+          actions: <Widget>[
+            TextFormField(
+              controller: _roomController,
+              cursorHeight: 20.0,
+              decoration: const InputDecoration(
+                icon: Icon(Icons.home),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(
+                    color: Color.fromARGB(255, 0, 0, 0),
+                    style: BorderStyle.solid,
+                    width: 2.0,
+                  ),
+                  borderRadius: BorderRadius.horizontal(
+                      left: Radius.circular(10.0),
+                      right: Radius.circular(10.0)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(
+                    color: Colors.deepPurpleAccent,
+                    width: 2.0,
+                  ),
+                  borderRadius: BorderRadius.horizontal(
+                      left: Radius.circular(10.0),
+                      right: Radius.circular(10.0)),
+                ),
+                labelText: "Room ID",
+                labelStyle: TextStyle(
+                  color: Colors.black,
+                  fontStyle: FontStyle.normal,
+                  fontWeight: FontWeight.bold,
+                ),
+                focusColor: Colors.indigo,
+              ),
+              textAlign: TextAlign.justify,
+              onChanged: (value) {
+                roomId = value;
+              },
+            ),
+            const SizedBox(
+              height: 5,
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                client = Client(name, roomId);
+                String data = await client.connectWithRoom();
+                if (data.isNotEmpty) {
+                  reachedLimit();
+                } else {
+                  Navigator.pop(context);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(
+                    Radius.circular(5),
+                  ),
+                ),
+              ),
+              child: const Text("Join Room"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void welcome() {
+    showDialog(
+      barrierColor: Colors.white,
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text("Let's Play"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _nameController,
+                cursorHeight: 20.0,
+                decoration: const InputDecoration(
+                  icon: Icon(Icons.person),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(
+                      color: Color.fromARGB(255, 0, 0, 0),
+                      style: BorderStyle.solid,
+                      width: 2.0,
+                    ),
+                    borderRadius: BorderRadius.horizontal(
+                        left: Radius.circular(10.0),
+                        right: Radius.circular(10.0)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(
+                      color: Colors.deepPurpleAccent,
+                      width: 2.0,
+                    ),
+                    borderRadius: BorderRadius.horizontal(
+                        left: Radius.circular(10.0),
+                        right: Radius.circular(10.0)),
+                  ),
+                  labelText: "Enter Name",
+                  labelStyle: TextStyle(
+                    color: Colors.black,
+                    fontStyle: FontStyle.normal,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  focusColor: Colors.indigo,
+                ),
+                textAlign: TextAlign.justify,
+                onChanged: (value) {
+                  name = value;
+                },
+              ),
+              const Divider(
+                height: 5,
+                color: Colors.white,
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton(
+                    onPressed: () {
+                      joinRoom();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(5)),
+                      ),
+                    ),
+                    child: const Text("Join Room"),
+                  ),
+                  const SizedBox(
+                    width: 10,
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      createRoom();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(5)),
+                      ),
+                    ),
+                    child: const Text("Create Room"),
+                  ),
+                ],
+              )
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void createRoom() {
+    Navigator.of(context).pop();
+    client = Client(name, roomId);
+    String room = client.createAndJoinRoom();
+    roomId = room;
+    showDialog(
+      barrierColor: Colors.white,
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text("Let's Play"),
+          content: Text('The created Room ID : $room'),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                //goToFreshStart(context);
+                Navigator.of(context).pop();
+              },
+              style: ElevatedButton.styleFrom(
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(5)),
+                ),
+              ),
+              child: const Text('Play'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void reachedLimit() {
+    Navigator.of(context).pop();
+    showDialog(
+      barrierColor: Colors.white,
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text("Limit Reached!"),
+          content: const Text('Try connecting another room'),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                //goToFreshStart(context);
+                Navigator.of(context).pop();
+              },
+              style: ElevatedButton.styleFrom(
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(5)),
+                ),
+              ),
+              child: const Text('Okay'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (!isWelcomeDialogShown) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        welcome();
+      });
+      isWelcomeDialogShown = true;
+    }
     return MaterialApp(
       title: 'Tic Tac Toe',
       home: Scaffold(
@@ -177,19 +409,35 @@ class _GamesState extends State<Games> {
                   for (int col = 0; col < 3; col++)
                     Matrix(
                       currentPlayer: player,
-                      onTap: () {
+                      onTap: () async {
+                        int temp = 0;
                         setState(() {
-                          int temp = 0;
                           if (matrixValues[row][col] == 0) {
                             temp = player;
                             matrixValues[row][col] = player;
                             player = player % 2 + 1;
+
                             if (isBingo(matrixValues, temp)) {
                               showWinnerDialog(temp);
                               _controllerCenter.play();
                             }
                           }
                         });
+                        var opp=await client.getOpponent(client.socket.id!);
+                        var ans = await client
+                            .transferMoves([opp, temp, row, col]);
+                        print("received : $ans");
+                        print(matrixValues);
+
+                        Matrix(
+                            currentPlayer: ans[1],
+                            onTap: () {
+                              setState(() {
+                                matrixValues[ans[2]][ans[3]] = ans[1];
+                              });
+                            },
+                            value: matrixValues[ans[2]][ans[3]]);
+                        print(matrixValues);
                       },
                       value: matrixValues[row][col],
                     ),
