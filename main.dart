@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:confetti/confetti.dart';
 import 'package:tic_tac_toe/client.dart';
+import 'package:tic_tac_toe/luffy.dart';
+
 import 'package:tic_tac_toe/matrix.dart';
 
 void main() {
@@ -32,8 +34,8 @@ class _GamesState extends State<Games> {
   List<List<int>> matrixValues =
       List.generate(3, (_) => List.generate(3, (_) => 0));
 
-  List<List<int>> movesHistory =
-      List.generate(3, (_) => List.generate(3, (_) => 0));
+  // List<List<int>> movesHistory =
+  //     List.generate(3, (_) => List.generate(3, (_) => 0));
 
   late ConfettiController _controllerCenter;
   // late ConfettiController _controllerCenterRight;
@@ -49,6 +51,7 @@ class _GamesState extends State<Games> {
   final TextEditingController _roomController = TextEditingController();
 
   bool isWelcomeDialogShown = false;
+  Map<String, int> opp = {};
 
   @override
   void initState() {
@@ -63,6 +66,10 @@ class _GamesState extends State<Games> {
       MaterialPageRoute(builder: (context) => const TicTacToe()),
       (Route<dynamic> route) => false,
     );
+  }
+
+  Future<void> setOpponent() async {
+    opp = await client.getOpponent(client.socket.id!);
   }
 
   bool isBingo(List<List<int>> grid, int member) {
@@ -213,6 +220,7 @@ class _GamesState extends State<Games> {
                 if (data.isNotEmpty) {
                   reachedLimit();
                 } else {
+                  await setOpponent();
                   Navigator.pop(context);
                 }
               },
@@ -337,7 +345,8 @@ class _GamesState extends State<Games> {
             ElevatedButton(
               onPressed: () {
                 //goToFreshStart(context);
-                Navigator.of(context).pop();
+                showWaitingForOpponentDialog();
+                waitForPlayer2ToJoin(room);
               },
               style: ElevatedButton.styleFrom(
                 shape: const RoundedRectangleBorder(
@@ -408,37 +417,12 @@ class _GamesState extends State<Games> {
                 children: [
                   for (int col = 0; col < 3; col++)
                     Matrix(
-                      currentPlayer: player,
                       onTap: () async {
-                        int temp = 0;
-                        setState(() {
-                          if (matrixValues[row][col] == 0) {
-                            temp = player;
-                            matrixValues[row][col] = player;
-                            player = player % 2 + 1;
-
-                            if (isBingo(matrixValues, temp)) {
-                              showWinnerDialog(temp);
-                              _controllerCenter.play();
-                            }
-                          }
-                        });
-                        var opp=await client.getOpponent(client.socket.id!);
-                        var ans = await client
-                            .transferMoves([opp, temp, row, col]);
-                        print("received : $ans");
-                        print(matrixValues);
-
-                        Matrix(
-                            currentPlayer: ans[1],
-                            onTap: () {
-                              setState(() {
-                                matrixValues[ans[2]][ans[3]] = ans[1];
-                              });
-                            },
-                            value: matrixValues[ans[2]][ans[3]]);
-                        print(matrixValues);
+                        client.transferMoves(
+                            [opp, 3 - opp[opp.keys.toList()[0]]!, row, col]);
+                        updateGame();
                       },
+                      currentPlayer: player,
                       value: matrixValues[row][col],
                     ),
                 ],
@@ -447,5 +431,67 @@ class _GamesState extends State<Games> {
         ),
       ),
     );
+  }
+
+  void updateGame() {
+    client.socket.on('receiveMove', (data) {
+      print("received data => $data");
+      final deserializedCompleters = deserializeCompleters(data[1]);
+      for (var i = 0; i < deserializedCompleters.length; i++) {
+        for (var j = 0; j < deserializedCompleters[0].length; j++) {
+          if (deserializedCompleters[i][j].length > 0 &&
+              !client.completers[i][j].isCompleted) {
+            client.completers[i][j].complete(deserializedCompleters[i][j]);
+          }
+        }
+      }
+      client.show();
+    });
+    _updateMatrixValues();
+  }
+
+  void _updateMatrixValues() async {
+    for (var i = 0; i < client.completers.length; i++) {
+      for (var j = 0; j < client.completers[0].length; j++) {
+        if (client.completers[i][j].isCompleted) {
+          var t = await client.completers[i][j].future;
+          setState(() {
+            matrixValues[i][j] = t[1];
+          });
+        }
+      }
+    }
+  }
+
+// Call the function where you need to update the state
+
+  void showWaitingForOpponentDialog() {
+    Navigator.of(context).pop();
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return const AlertDialog(
+          title: Text("Waiting for Opponent"),
+          content: Text("Please wait for an opponent to join..."),
+        );
+      },
+    );
+  }
+
+  void waitForPlayer2ToJoin(String room) async {
+    // Check periodically if player 2 has joined
+    // print("---------------------");
+    // int c = await client.playersInRoom(room);
+    // print(c);
+    // print("---------------------");
+    while (opp.isEmpty) {
+      int c = await client.playersInRoom(room);
+      if (c == 2) {
+        await setOpponent(); // Set the opponent
+        Navigator.of(context).pop(); // Close the waiting dialog
+      }
+      await Future.delayed(
+          const Duration(seconds: 1)); // Delay before checking again
+    }
   }
 }
